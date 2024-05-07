@@ -1,8 +1,8 @@
 from pydantic import Field
 from speckle_automate import AutomationContext, AutomateBase, execute_automate_function
 from Utilities.helpers import flatten_base, speckle_print
-import random
 
+from rules import RevitRules
 
 class FunctionInputs(AutomateBase):
     """These are function author defined values.
