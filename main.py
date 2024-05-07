@@ -4,6 +4,12 @@ from Utilities.helpers import flatten_base, speckle_print
 
 from rules import RevitRules
 
+
+from Utilities.helpers import flatten_base, speckle_print
+from Utilities.spreadsheet import read_rules_from_spreadsheet
+from Workshop.Exercise_4.rules import apply_rules_to_objects
+
+
 class FunctionInputs(AutomateBase):
     """These are function author defined values.
 
@@ -12,15 +18,12 @@ class FunctionInputs(AutomateBase):
     https://docs.pydantic.dev/latest/usage/models/
     """
 
-    # In this exercise, we will add two new input fields to the FunctionInputs class.
-    category: str = Field(
-        title="Revit Category",
-        description="This is the category objects to check.",
+    # In this exercise, we will move rules to an external source so not to hardcode them.
+    spreadsheet_url: str = Field(
+        title="Spreadsheet URL",
+        description="This is the URL of the spreadsheet to check. It should be a TSV format data source.",
     )
-    property: str = Field(
-        title="Property Name",
-        description="This is the property to check.",
-    )
+
 
 def automate_function(
     automate_context: AutomationContext,
@@ -42,94 +45,19 @@ def automate_function(
     # We can continue to work with a flattened list of objects.
     flat_list_of_objects = list(flatten_base(version_root_object))
 
-    # filter to only include objects that are in the specified category
-    in_category_objects = [
-        speckle_object
-        for speckle_object in flat_list_of_objects
-        if RevitRules.is_category(speckle_object, function_inputs.category)
-    ]
+    # read the rules from the spreadsheet
+    rules = read_rules_from_spreadsheet(function_inputs.spreadsheet_url)
 
-    # check if the property exists on the objects
-    non_property_objects = [
-        obj
-        for obj in in_category_objects
-        if not RevitRules.has_parameter(obj, function_inputs.property)
-    ]
-
-    property_objects = [
-        obj
-        for obj in in_category_objects
-        if RevitRules.has_parameter(obj, function_inputs.property)
-    ]
-
-    # property_objects should be those where while the property is present,
-    # is not an empty string or the default value
-    valid_property_objects = [
-        obj
-        for obj in property_objects
-        if RevitRules.get_parameter_value(obj, function_inputs.property)
-        not in ["", "Default", None]
-    ]
-
-    for obj in valid_property_objects:
-        speckle_print(RevitRules.get_parameter_value(obj, function_inputs.property))
-
-    # invalid_property_objects property_objects not in valid_property_objects
-    invalid_property_objects = [
-        obj for obj in property_objects if obj not in valid_property_objects
-    ]
-
-    # mark all the non-property objects as failed
-
-    (
-        automate_context.attach_error_to_objects(
-            category=f"Missing Property {function_inputs.category} Objects",
-            object_ids=[obj.id for obj in non_property_objects],
-            message=f"This {function_inputs.category} does not have the specified property {function_inputs.property}",
-        )
-        if non_property_objects
-        else None
-    )
-
-    # mark all the invalid property objects as warning
-    (
-        automate_context.attach_warning_to_objects(
-            category=f"Invalid Property {function_inputs.category} Objects",
-            object_ids=[obj.id for obj in invalid_property_objects],
-            message=f"This {function_inputs.category} has the specified property {function_inputs.property} but it is "
-            f"empty or default",
-        )
-        if invalid_property_objects
-        else None
-    )
-
-    # mark all the property objects as successful
-    (
-        automate_context.attach_info_to_objects(
-            category=f"Valid Property {function_inputs.category} Objects",
-            object_ids=[obj.id for obj in property_objects],
-            message=f"This {function_inputs.category} has the specified property {function_inputs.property}",
-        )
-        if property_objects
-        else None
-    )
-
-    if len(non_property_objects) > 0:
-        automate_context.mark_run_failed(
-            "Some objects do not have the specified property."
-        )
-    elif len(invalid_property_objects) > 0:
-        automate_context.mark_run_success(
-            "Some objects have the specified property but it is empty or default.",
-        )
-
-    else:
-        automate_context.mark_run_success(
-            f"All {function_inputs.category} objects have the {function_inputs.property} property."
-        )
+    # apply the rules to the objects
+    apply_rules_to_objects(flat_list_of_objects, rules, automate_context)
 
     # set the automation context view, to the original model / version view
     automate_context.set_context_view()
+
+    # report success
+    automate_context.mark_run_success(
+        f"Successfully applied rules to {len(flat_list_of_objects)} objects."
+    )
 
 
 
