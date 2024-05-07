@@ -1,7 +1,8 @@
 from pydantic import Field
 from speckle_automate import AutomationContext, AutomateBase, execute_automate_function
 from Utilities.helpers import flatten_base, speckle_print
-import random
+
+from rules import RevitRules
 
 
 class FunctionInputs(AutomateBase):
@@ -12,23 +13,21 @@ class FunctionInputs(AutomateBase):
     https://docs.pydantic.dev/latest/usage/models/
     """
 
-    comment_phrase: str = Field(
-        title="Comment Phrase",
-        description="This phrase will be added to a random model element.",
+    # In this exercise, we will add two new input fields to the FunctionInputs class.
+    category: str = Field(
+        title="Revit Category",
+        description="This is the category objects to check.",
     )
-
-    # We now want to specify the number of elements to which the comment phrase will be added.
-    number_of_elements: int = Field(
-        title="Number of Elements",
-        description="The number of elements to which the comment phrase will be added.",
+    property: str = Field(
+        title="Property Name",
+        description="This is the property to check.",
     )
-
 
 def automate_function(
     automate_context: AutomationContext,
     function_inputs: FunctionInputs,
 ) -> None:
-    """This is an example Speckle Automate function.
+    """This version of the function will add a check for the new provide inputs.
 
     Args:
         automate_context: A context helper object, that carries relevant information
@@ -41,107 +40,94 @@ def automate_function(
     # the context provides a convenient way, to receive the triggering version
     version_root_object = automate_context.receive_version()
 
+    # We can continue to work with a flattened list of objects.
     flat_list_of_objects = list(flatten_base(version_root_object))
 
-    # filter the list to only include objects that are displayable.
-    # this is a simple example, that checks if the object has a displayValue
-    displayable_objects = [
+    # filter to only include objects that are in the specified category
+    in_category_objects = [
         speckle_object
         for speckle_object in flat_list_of_objects
-        if (
-            getattr(speckle_object, "displayValue", None)
-            or getattr(speckle_object, "@displayValue", None)
-        )
-        and getattr(speckle_object, "id", None) is not None
+        if RevitRules.is_category(speckle_object, function_inputs.category)
     ]
 
-    # a better displayable_objects should also include those instance objects that have a definition property
-    # that cross-references to a speckle id, that is in turn displayable, so we need to add those objects to the list
-    displayable_objects += [
-        instance_object
-        for instance_object in flat_list_of_objects
-        if (
-            getattr(instance_object, "definition", None)
-            and (
-                (
-                    getattr(
-                        getattr(instance_object, "definition"), "displayValue", None
-                    )
-                    or getattr(
-                        getattr(instance_object, "definition"), "@displayValue", None
-                    )
-                )
-                and getattr(getattr(instance_object, "definition"), "id", None)
-                is not None
-            )
-        )
+    # check if the property exists on the objects
+    non_property_objects = [
+        obj
+        for obj in in_category_objects
+        if not RevitRules.has_parameter(obj, function_inputs.property)
     ]
 
-    if len(displayable_objects) == 0:
+    property_objects = [
+        obj
+        for obj in in_category_objects
+        if RevitRules.has_parameter(obj, function_inputs.property)
+    ]
+
+    # property_objects should be those where while the property is present,
+    # is not an empty string or the default value
+    valid_property_objects = [
+        obj
+        for obj in property_objects
+        if RevitRules.get_parameter_value(obj, function_inputs.property)
+        not in ["", "Default", None]
+    ]
+
+    for obj in valid_property_objects:
+        speckle_print(RevitRules.get_parameter_value(obj, function_inputs.property))
+
+    # invalid_property_objects property_objects not in valid_property_objects
+    invalid_property_objects = [
+        obj for obj in property_objects if obj not in valid_property_objects
+    ]
+
+    # mark all the non-property objects as failed
+
+    (
+        automate_context.attach_error_to_objects(
+            category=f"Missing Property {function_inputs.category} Objects",
+            object_ids=[obj.id for obj in non_property_objects],
+            message=f"This {function_inputs.category} does not have the specified property {function_inputs.property}",
+        )
+        if non_property_objects
+        else None
+    )
+
+    # mark all the invalid property objects as warning
+    (
+        automate_context.attach_warning_to_objects(
+            category=f"Invalid Property {function_inputs.category} Objects",
+            object_ids=[obj.id for obj in invalid_property_objects],
+            message=f"This {function_inputs.category} has the specified property {function_inputs.property} but it is "
+            f"empty or default",
+        )
+        if invalid_property_objects
+        else None
+    )
+
+    # mark all the property objects as successful
+    (
+        automate_context.attach_info_to_objects(
+            category=f"Valid Property {function_inputs.category} Objects",
+            object_ids=[obj.id for obj in property_objects],
+            message=f"This {function_inputs.category} has the specified property {function_inputs.property}",
+        )
+        if property_objects
+        else None
+    )
+
+    if len(non_property_objects) > 0:
         automate_context.mark_run_failed(
-            "Automation failed: No displayable objects found."
+            "Some objects do not have the specified property."
+        )
+    elif len(invalid_property_objects) > 0:
+        automate_context.mark_run_success(
+            "Some objects have the specified property but it is empty or default.",
         )
 
     else:
-        # select a random object from the list
-        # random_object = random.choice(displayable_objects)
-
-        # instead of a single object we will select a random subset of displayable objects from the provided dataset
-        real_number_of_elements = min(
-            # We cant take more elements than we have
-            function_inputs.number_of_elements,
-            len(displayable_objects),
-        )
-
-        selected_objects = random.sample(
-            displayable_objects,
-            real_number_of_elements,
-        )
-
-        # create a list of object ids for all selected objects
-        selected_object_ids = [obj.id for obj in selected_objects]
-
-        # ACTIONS
-
-        # attach comment phrase to all selected objects
-        # it is possible to attach the same comment phrase to multiple objects
-        # the category "Selected Objects" is used to group the objects in the viewer
-        # grouping results in this way is a clean way to organize the objects in the viewer
-        comment_message = f"{function_inputs.comment_phrase}"
-        automate_context.attach_info_to_objects(
-            category="Selected Objects",
-            object_ids=selected_object_ids,
-            message=comment_message,
-        )
-
-        # attach index as gradient value for all selected objects. this will be used for visualisation purposes
-        # the category "Index Visualisation" is used to group the objects in the viewer
-        gradient_values = {
-            object_id: {"gradientValue": index + 1}
-            for index, object_id in enumerate(selected_object_ids)
-        }
-
-        automate_context.attach_info_to_objects(
-            category="Index Visualisation",
-            metadata={
-                "gradient": True,
-                "gradientValues": gradient_values,
-            },
-            message="Object Indexes",
-            object_ids=selected_object_ids,
-        )
-
         automate_context.mark_run_success(
-            f"Added comment to {real_number_of_elements} random objects."
+            f"All {function_inputs.category} objects have the {function_inputs.property} property."
         )
 
     # set the automation context view, to the original model / version view
     automate_context.set_context_view()
-
-
-# make sure to call the function with the executor
-if __name__ == "__main__":
-    # NOTE: always pass in the automate function by its reference, do not invoke it!
-
-    # pass in the function reference with the inputs schema to the executor
-    execute_automate_function(automate_function, FunctionInputs)
