@@ -1,5 +1,5 @@
 from pydantic import Field
-from speckle_automate import AutomationContext, AutomateBase
+from speckle_automate import AutomationContext, AutomateBase, execute_automate_function
 from Utilities.helpers import flatten_base, speckle_print
 import random
 
