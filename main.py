@@ -1,8 +1,7 @@
 from pydantic import Field
 from speckle_automate import AutomationContext, AutomateBase, execute_automate_function
 from Utilities.helpers import flatten_base, speckle_print
-
-from rules import RevitRules
+import random
 
 
 class FunctionInputs(AutomateBase):
@@ -131,3 +130,12 @@ def automate_function(
 
     # set the automation context view, to the original model / version view
     automate_context.set_context_view()
+
+
+
+# make sure to call the function with the executor
+if __name__ == "__main__":
+    # NOTE: always pass in the automate function by its reference, do not invoke it!
+
+    # pass in the function reference with the inputs schema to the executor
+    execute_automate_function(automate_function, FunctionInputs)
