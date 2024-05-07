@@ -1,0 +1,38 @@
+[tool.poetry]
+name = "speckle-automate-py"
+version = "0.1.0"
+description = "Template function for BILT Riga Coding workshop"
+authors = ["Jonathon Broughton <jonathon@speckle.systems>"]
+readme = "README.md"
+package-mode = false
+
+[tool.poetry.dependencies]
+python = "^3.11"
+specklepy = "2.18.3"
+python-levenshtein = "^0.25.1"
+more-itertools = "^10.2.0"
+pandas = "^2.2.2"
+python-dotenv = "^1.0.1"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.0.0"
+mypy = "^1.3.0"
+ruff = "^0.4.0"
+pytest = "^8.0.0"
+# specklepy = { path = "../specklepy", develop = true }
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.ruff]
+select = [
+  "E",  # pycodestyle
+  "F",  # pyflakes
+  "UP", # pyupgrade
+  "D",  # pydocstyle
+  "I",  # isort
+]
+
+[tool.ruff.pydocstyle]
+convention = "google"
