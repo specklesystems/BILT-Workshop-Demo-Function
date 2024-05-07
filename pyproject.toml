@@ -1,5 +1,5 @@
 [tool.poetry]
-name = "speckle-automate-py"
+name = "bilt-workshop-demo-function"
 version = "0.1.0"
 description = "Template function for BILT Riga Coding workshop"
 authors = ["Jonathon Broughton <jonathon@speckle.systems>"]
