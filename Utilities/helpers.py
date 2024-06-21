@@ -58,8 +58,7 @@ def flatten_base_thorough(base: Base, parent_type: str = None) -> Iterable[Base]
         except KeyError:
             pass
 
-    else:
-        yield base
+    yield base
 
 
 def extract_base_and_transform(
