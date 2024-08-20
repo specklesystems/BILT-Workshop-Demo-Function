@@ -7,7 +7,7 @@ readme = "README.md"
 
 [tool.poetry.dependencies]
 python = "^3.11"
-specklepy = "2.18.3"
+specklepy = "^2.19.6"
 python-levenshtein = "^0.25.1"
 more-itertools = "^10.2.0"
 pandas = "^2.2.2"
